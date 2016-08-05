@@ -34,13 +34,20 @@ module.exports = function proxy(host, options) {
 
     maybeModifyPath(userReq, userRes)
       .then(function(proxyPath) {
-        proxyWithResolvedPath(userReq, userRes, userNext, proxyPath);
+        // would be better liket
+        //proxyRequest(userReq, proxyPath)
+        // .then(catchResponse)
+            //.then(userResponse)
+
+        proxyRequest(userReq, userRes, userNext, proxyPath);
       });
   };
 
-  function proxyWithResolvedPath(userReq, userRes, userNext, proxyPath) {
+  function proxyRequest(userReq, userRes, userNext, proxyPath) {
+
     parsedHost = parsedHost || parseHost(host, userReq);
 
+    // getRequestBody
     if (userReq.body) {
       runProxy(null, userReq.body);
     } else {
@@ -50,9 +57,11 @@ module.exports = function proxy(host, options) {
         encoding: bodyEncoding(options),
       }, runProxy);
     }
+    // end getRequestBody, return requestBody
+
 
     function runProxy(err, bodyContent) {
-      var reqOpt = {
+      var proxyReq = {
         hostname: parsedHost.host,
         port: options.port || parsedHost.port,
         headers: reqHeaders(userReq, options),
@@ -63,16 +72,16 @@ module.exports = function proxy(host, options) {
       };
 
       if (preserveReqSession) {
-        reqOpt.session = userReq.session;
+        proxyReq.session = userReq.session;
       }
 
       if (decorateRequest) {
-        reqOpt = decorateRequest(reqOpt, userReq) || reqOpt;
+        proxyReq = decorateRequest(proxyReq, userReq) || proxyReq;
       }
 
-      bodyContent = reqOpt.bodyContent;
-      delete reqOpt.bodyContent;
-      delete reqOpt.params;
+      bodyContent = proxyReq.bodyContent;
+      delete proxyReq.bodyContent;
+      delete proxyReq.params;
 
       if (err && !bodyContent) {
         return userNext(err);
@@ -82,13 +91,13 @@ module.exports = function proxy(host, options) {
         asBuffer(bodyContent, options) :
         asBufferOrString(bodyContent);
 
-      reqOpt.headers['content-length'] = getContentLength(bodyContent);
+      proxyReq.headers['content-length'] = getContentLength(bodyContent);
 
       if (bodyEncoding(options)) {
-        reqOpt.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
+        proxyReq.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
       }
 
-      var realRequest = parsedHost.module.request(reqOpt, function(rsp) {
+      var realRequest = parsedHost.module.request(proxyReq, function(rsp) {
         var chunks = [];
 
         rsp.on('data', function(chunk) {
