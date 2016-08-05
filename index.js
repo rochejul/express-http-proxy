@@ -61,7 +61,7 @@ module.exports = function proxy(host, options) {
 
 
     function runProxy(err, bodyContent) {
-      var proxyReq = {
+      var proxyReqOpts = {
         hostname: parsedHost.host,
         port: options.port || parsedHost.port,
         headers: reqHeaders(userReq, options),
@@ -72,16 +72,16 @@ module.exports = function proxy(host, options) {
       };
 
       if (preserveReqSession) {
-        proxyReq.session = userReq.session;
+        proxyReqOpts.session = userReq.session;
       }
 
       if (decorateRequest) {
-        proxyReq = decorateRequest(proxyReq, userReq) || proxyReq;
+        proxyReqOpts = decorateRequest(proxyReqOpts, userReq) || proxyReqOpts;
       }
 
-      bodyContent = proxyReq.bodyContent;
-      delete proxyReq.bodyContent;
-      delete proxyReq.params;
+      bodyContent = proxyReqOpts.bodyContent;
+      delete proxyReqOpts.bodyContent;
+      delete proxyReqOpts.params;
 
       if (err && !bodyContent) {
         return userNext(err);
@@ -91,13 +91,13 @@ module.exports = function proxy(host, options) {
         asBuffer(bodyContent, options) :
         asBufferOrString(bodyContent);
 
-      proxyReq.headers['content-length'] = getContentLength(bodyContent);
+      proxyReqOpts.headers['content-length'] = getContentLength(bodyContent);
 
       if (bodyEncoding(options)) {
-        proxyReq.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
+        proxyReqOpts.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
       }
 
-      var realRequest = parsedHost.module.request(proxyReq, function(rsp) {
+      var proxyReq = parsedHost.module.request(proxyReqOpts, function(rsp) {
         var chunks = [];
 
         rsp.on('data', function(chunk) {
@@ -156,15 +156,15 @@ module.exports = function proxy(host, options) {
         }
       });
 
-      realRequest.on('socket', function(socket) {
+      proxyReq.on('socket', function(socket) {
         if (options.timeout) {
           socket.setTimeout(options.timeout, function() {
-            realRequest.abort();
+            proxyReq.abort();
           });
         }
       });
 
-      realRequest.on('error', function(err) {
+      proxyReq.on('error', function(err) {
         if (err.code === 'ECONNRESET') {
           userRes.setHeader('X-Timout-Reason',
             'express-http-proxy timed out your request after ' +
@@ -178,13 +178,13 @@ module.exports = function proxy(host, options) {
       });
 
       if (bodyContent.length) {
-        realRequest.write(bodyContent);
+        proxyReq.write(bodyContent);
       }
 
-      realRequest.end();
+      proxyReq.end();
 
       userReq.on('aborted', function() {
-        realRequest.abort();
+        proxyReq.abort();
       });
     }
   }
