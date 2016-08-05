@@ -28,15 +28,48 @@ module.exports = function proxy(host, options) {
 
   /* To avoid confusion between the nested req, res, next functions, they are wordily named */
 
+  var maybeDoNothing = function(userReq, userNext) {
+      return new promise.Promise(function(resolve, reject) {
+        return filter(userReq) ? resolve(userReq) : reject(userNext);
+      });
+  };
+
+
+
   return function proxy(userReq, userRes, userNext) {
     // TODO: Clean up use or userRes in these methods
+    debugger;
+    maybeDoNothing(userReq, userNext)
+      .then(function(userReq) {
+        maybeModifyPath(userReq)
+        .then(function(proxyPath) {
+          proxyRequest(userReq, userRes, userNext, proxyPath);
+        });
+      })
+      .catch(function () {
+        userNext();
+      });
+
+      return;
     if (!filter(userReq, userRes)) { return userNext(); }
+
+    // My Dream!
+    //maybeDoNothing(userReq)
+      //.then(maybeModifyPath)
+      //.then(getRequestBody)
+      //.then(maybeModifyRequest)
+      //.then(maybeModifyRequestBody)
+      //.then(doProxyRequest)
+      //.then(maybeModifyResponse)
+      //.then(userResponse);
+      ////.catch()
 
     maybeModifyPath(userReq, userRes)
       .then(function(proxyPath) {
-        // would be better liket
-        //proxyRequest(userReq, proxyPath)
+        // maybeModifyRequest // userReuest
+        // proxyRequest(userReq, proxyPath)
         // .then(catchResponse)
+        // maybeModifyResponse // response, next
             //.then(userResponse)
 
         proxyRequest(userReq, userRes, userNext, proxyPath);
