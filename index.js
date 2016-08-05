@@ -20,28 +20,32 @@ module.exports = function proxy(host, options) {
   var intercept = options.intercept;
   var decorateRequest = options.decorateRequest;
   var forwardPath = options.forwardPath || defaultForwardPath;
-  var forwardPathAsync = options.forwardPathAsync || defaultForwardPathAsync(forwardPath);
+  // Transition to new option name && Deprecate this option name
+  var maybeModifyPath = options.forwardPathAsync || defaultForwardPathAsync(forwardPath);
   var filter = options.filter || defaultFilter;
   var limit = options.limit || '1mb';
   var preserveReqSession = options.preserveReqSession;
 
-  return function handleProxy(req, res, next) {
-    if (!filter(req, res)) { return next(); }
+  /* To avoid confusion between the nested req, res, next functions, they are wordily named */
 
-    forwardPathAsync(req, res)
-      .then(function(path) {
-        proxyWithResolvedPath(req, res, next, path);
+  return function proxy(userReq, userRes, userNext) {
+    // TODO: Clean up use or userRes in these methods
+    if (!filter(userReq, userRes)) { return userNext(); }
+
+    maybeModifyPath(userReq, userRes)
+      .then(function(proxyPath) {
+        proxyWithResolvedPath(userReq, userRes, userNext, proxyPath);
       });
   };
 
-  function proxyWithResolvedPath(req, res, next, path) {
-    parsedHost = parsedHost || parseHost(host, req);
+  function proxyWithResolvedPath(userReq, userRes, userNext, proxyPath) {
+    parsedHost = parsedHost || parseHost(host, userReq);
 
-    if (req.body) {
-      runProxy(null, req.body);
+    if (userReq.body) {
+      runProxy(null, userReq.body);
     } else {
-      getRawBody(req, {
-        length: req.headers['content-length'],
+      getRawBody(userReq, {
+        length: userReq.headers['content-length'],
         limit: limit,
         encoding: bodyEncoding(options),
       }, runProxy);
@@ -51,19 +55,19 @@ module.exports = function proxy(host, options) {
       var reqOpt = {
         hostname: parsedHost.host,
         port: options.port || parsedHost.port,
-        headers: reqHeaders(req, options),
-        method: req.method,
-        path: path,
+        headers: reqHeaders(userReq, options),
+        method: userReq.method,
+        path: proxyPath,
         bodyContent: bodyContent,
-        params: req.params,
+        params: userReq.params,
       };
 
       if (preserveReqSession) {
-        reqOpt.session = req.session;
+        reqOpt.session = userReq.session;
       }
 
       if (decorateRequest) {
-        reqOpt = decorateRequest(reqOpt, req) || reqOpt;
+        reqOpt = decorateRequest(reqOpt, userReq) || reqOpt;
       }
 
       bodyContent = reqOpt.bodyContent;
@@ -71,7 +75,7 @@ module.exports = function proxy(host, options) {
       delete reqOpt.params;
 
       if (err && !bodyContent) {
-        return next(err);
+        return userNext(err);
       }
 
       bodyContent = options.reqAsBuffer ?
@@ -96,49 +100,49 @@ module.exports = function proxy(host, options) {
           var rspData = Buffer.concat(chunks, chunkLength(chunks));
 
           if (intercept) {
-            intercept(rsp, rspData, req, res, function(err, rspd, sent) {
+            intercept(rsp, rspData, userReq, userRes, function(err, rspd, sent) {
               if (err) {
-                return next(err);
+                return userNext(err);
               }
 
               rspd = asBuffer(rspd, options);
 
               if (!Buffer.isBuffer(rspd)) {
-                next(new Error('intercept should return string or' +
+                userNext(new Error('intercept should return string or' +
                       'buffer as data'));
               }
 
-              if (!res.headersSent) {
-                res.set('content-length', rspd.length);
+              if (!userRes.headersSent) {
+                userRes.set('content-length', rspd.length);
               } else if (rspd.length !== rspData.length) {
                 var error = '"Content-Length" is already sent,' +
                       'the length of response data can not be changed';
-                next(new Error(error));
+                userNext(new Error(error));
               }
 
               if (!sent) {
-                res.send(rspd);
+                userRes.send(rspd);
               }
             });
           } else {
             // see issue https://github.com/villadora/express-http-proxy/issues/104
             // Not sure how to automate tests on this line, so be careful when changing.
-            if (!res.headersSent) {
-              res.send(rspData);
+            if (!userRes.headersSent) {
+              userRes.send(rspData);
             }
           }
         });
 
         rsp.on('error', function(e) {
-          next(e);
+          userNext(e);
         });
 
-        if (!res.headersSent) {
-          res.status(rsp.statusCode);
+        if (!userRes.headersSent) {
+          userRes.status(rsp.statusCode);
           Object.keys(rsp.headers)
             .filter(function(item) { return item !== 'transfer-encoding'; })
             .forEach(function(item) {
-              res.set(item, rsp.headers[item]);
+              userRes.set(item, rsp.headers[item]);
             });
         }
       });
@@ -153,14 +157,14 @@ module.exports = function proxy(host, options) {
 
       realRequest.on('error', function(err) {
         if (err.code === 'ECONNRESET') {
-          res.setHeader('X-Timout-Reason',
+          userRes.setHeader('X-Timout-Reason',
             'express-http-proxy timed out your request after ' +
             options.timeout + 'ms.');
-          res.writeHead(504, {'Content-Type': 'text/plain'});
-          res.end();
-          next();
+          userRes.writeHead(504, {'Content-Type': 'text/plain'});
+          userRes.end();
+          userNext();
         } else {
-          next(err);
+          userNext(err);
         }
       });
 
@@ -170,7 +174,7 @@ module.exports = function proxy(host, options) {
 
       realRequest.end();
 
-      req.on('aborted', function() {
+      userReq.on('aborted', function() {
         realRequest.abort();
       });
     }
