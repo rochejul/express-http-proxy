@@ -67,31 +67,25 @@ module.exports = function proxy(host, options) {
       //.then(userResponse);
       ////.catch()
 
-    var maybeModifyReqBody = function (req) {
-      return new promise.Promise(function (resolve, reject) {
-        resolve(req);
-      });
-    };
+    //var maybeModifyReqBody = function (req) {
+      //return new promise.Promise(function (resolve, reject) {
+        //resolve(req);
+      //});
+    //};
 
-    var createProxyRequest = function (req) {
-      return new promise.Promise(function (resolve, reject) {
-        resolve(req);
-      });
-    }
+    //var createProxyReqOpts = function (req) {
+      //return new promise.Promise(function (resolve) {
+        //resolve(req);
+      //});
+    //};
 
     maybeDoNothing(userReq, userNext)
       .then(function(userReq) {
         parseReqBody(userReq)
           .then(function(userReq) {
-            createProxyRequest(userReq)
-            .then(function (userReq) {
-              maybeModifyReqBody(userReq)
-              .then(function(userReq) {
-                maybeModifyPath(userReq)
-                .then(function(proxyPath) {
-                  proxyRequest(userReq, userRes, userNext, proxyPath);
-                });
-              });
+            maybeModifyPath(userReq)
+            .then(function(proxyPath) {
+              proxyRequest(userReq, userRes, userNext, proxyPath);
             });
           });
       })
@@ -203,6 +197,12 @@ module.exports = function proxy(host, options) {
         }
       });
 
+      if (bodyContent.length) {
+        proxyReq.write(bodyContent);
+      }
+
+      proxyReq.end();
+
       proxyReq.on('socket', function(socket) {
         if (options.timeout) {
           socket.setTimeout(options.timeout, function() {
@@ -224,11 +224,6 @@ module.exports = function proxy(host, options) {
         }
       });
 
-      if (bodyContent.length) {
-        proxyReq.write(bodyContent);
-      }
-
-      proxyReq.end();
 
       userReq.on('aborted', function() {
         proxyReq.abort();
