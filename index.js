@@ -21,12 +21,17 @@ module.exports = function proxy(host, options) {
   var decorateRequest = options.decorateRequest;
   var forwardPath = options.forwardPath || defaultForwardPath;
   // Transition to new option name && Deprecate this option name
-  var maybeModifyPath = options.forwardPathAsync || defaultForwardPathAsync(forwardPath);
+  var forwardPathAsync = options.forwardPathAsync || defaultForwardPathAsync(forwardPath);
   var filter = options.filter || defaultFilter;
   var limit = options.limit || '1mb';
   var preserveReqSession = options.preserveReqSession;
 
   /* To avoid confusion between the nested req, res, next functions, they are wordily named */
+
+  function maybeModifyPath(reqOpts) {
+    reqOpts.path = forwardPath(reqOpts);
+    return Promise.resolve(reqOpts);
+  }
 
   var maybeDoNothing = function(userReq, userNext) {
       return new promise.Promise(function(resolve, reject) {
@@ -34,21 +39,22 @@ module.exports = function proxy(host, options) {
       });
   };
 
-  var parseReqBody = function(req) {
+  var parseReqBody = function(userReq, proxyReqOpts) {
     return new promise.Promise(function(resolve, reject) {
-      if (req.body) {
-        resolve(req);
+      if (userReq.body) {
+        proxyReqOpts.body = userReq.body;
+        resolve(proxyReqOpts);
       } else {
-        getRawBody(req, {
-          length: req.headers['content-length'],
+        getRawBody(userReq, {
+          length: userReq.headers['content-length'],
           limit: limit,
           encoding: bodyEncoding(options),
         }, function (err, body) {
           if(err) {
             reject(err);
           }
-          req.body = body;
-          resolve(req);
+          proxyReqOpts.body = body;
+          resolve(proxyReqOpts);
         });
       }
     });
@@ -69,7 +75,7 @@ module.exports = function proxy(host, options) {
 
     //var maybeModifyReqBody = function (req) {
       //return new promise.Promise(function (resolve, reject) {
-        //resolve(req);
+        //resolve(req);userReq
       //});
     //};
 
@@ -95,64 +101,93 @@ module.exports = function proxy(host, options) {
     //});
 
     var createProxyReqOpts = function (userReq) {
-      var proxyReqOpts = {
-        //hostname: parsedHost.host,
-        //port: options.port || parsedHost.port,
-        headers: reqHeaders(userReq, options),
-        method: userReq.method,
-        path: userReq.path,
-        url: userReq.url,
-        //bodyContent: bodyContent,
-        params: userReq.params,
-      };
-      return Promise.resolve(proxyReqOpts);
-    };
-
-    maybeDoNothing(userReq, userNext)
-      .then(function(userReq) {
-        return parseReqBody(userReq);
-      })
-      .then(function(userReq){
-        return createProxyReqOpts(userReq);
-      })
-      .then(function(userReq) {
-        return maybeModifyPath(userReq);
-      })
-      .then(function (proxyPath) {
-        return proxyRequest(userReq, userRes, userNext, proxyPath);
-      })
-      .catch(function (token) {
-        userNext(token);
-      });
-
-  };
-
-  function proxyRequest(userReq, userRes, userNext, proxyPath) {
-
-    parsedHost = parsedHost || parseHost(host, userReq);
-
-    runProxy(userReq.body);
-
-    function runProxy(bodyContent) {
+      var parsedHost = parseHost(host, userReq);
       var proxyReqOpts = {
         hostname: parsedHost.host,
         port: options.port || parsedHost.port,
         headers: reqHeaders(userReq, options),
         method: userReq.method,
-        path: proxyPath,
-        bodyContent: bodyContent,
+        path: userReq.path,
+        url: userReq.url,
         params: userReq.params,
       };
-
       if (preserveReqSession) {
         proxyReqOpts.session = userReq.session;
       }
+      return Promise.resolve(proxyReqOpts);
+    };
 
+    function maybeModifyReqBody(proxyReqOpts, userReq) {
       if (decorateRequest) {
+        debugger;
         proxyReqOpts = decorateRequest(proxyReqOpts, userReq) || proxyReqOpts;
       }
 
-      bodyContent = proxyReqOpts.bodyContent;
+      return Promise.resolve(proxyReqOpts);
+    }
+
+    function maybeModifyResponse(proxyResponse) {
+      if (!intercept) {
+        return promise.Promise.resolve(proxyResponse);
+      }
+
+      return new promise.Promise(function (resolve) {
+        debugger;
+        intercept(rsp, rspData, userReq, userRes, resolve);
+      });
+    }
+    maybeDoNothing(userReq, userNext)
+      .then(function(userReq){
+        return createProxyReqOpts(userReq);
+      })
+      .then(function(proxyReqOpts) {
+        return parseReqBody(userReq, proxyReqOpts);
+      })
+      .then(function(proxyReqOpts) {
+        return maybeModifyPath(proxyReqOpts);
+      })
+      .then(function(proxyReqOpts) {
+        return maybeModifyReqBody(proxyReqOpts, userReq);
+      })
+      .then(function (proxyReqOpts) {
+        return proxyReq2(proxyReqOpts, userReq, userNext);
+      })
+      .then(function (proxyResponse) {
+        return maybeModifyResponse(proxyResponse, );
+      })
+      .then(function(finalResponse) {
+        debugger;
+      })
+      .catch(function (token) {
+        userNext(token);
+      });
+  };
+
+  function proxyReq2(proxyReqOpts, userReq) {
+    return new promise.Promise(function (resolve) {
+      var parsedHost = parseHost(host, userReq); // terrible, but needed atm
+      var proxyReq = parsedHost.module.request(proxyReqOpts, function(rsp) {
+        var chunks = [];
+
+        rsp.on('data', function(chunk) {
+          chunks.push(chunk);
+        });
+
+        rsp.on('end', function() {
+          var rspData = Buffer.concat(chunks, chunkLength(chunks));
+          resolve(rspData);
+        });
+      });
+      proxyReq.end();
+    });
+  }
+
+  function proxyRequest(proxyReqOpts, userReq, userNext) {
+    runProxy(proxyReqOpts.body);
+
+    function runProxy(bodyContent) {
+
+      var parsedHost = parseHost(host, userReq); // terrible, but needed atm
       delete proxyReqOpts.bodyContent;
       delete proxyReqOpts.params;
 
@@ -164,12 +199,12 @@ module.exports = function proxy(host, options) {
         asBuffer(bodyContent, options) :
         asBufferOrString(bodyContent);
 
+      debugger;
       proxyReqOpts.headers['content-length'] = getContentLength(bodyContent);
 
       if (bodyEncoding(options)) {
         proxyReqOpts.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
       }
-
       var proxyReq = parsedHost.module.request(proxyReqOpts, function(rsp) {
         var chunks = [];
 
@@ -260,6 +295,7 @@ module.exports = function proxy(host, options) {
       userReq.on('aborted', function() {
         proxyReq.abort();
       });
+
     }
   }
 };
@@ -360,11 +396,11 @@ function defaultForwardPathAsync(forwardPath) {
   'use strict';
   return function(req) {
     return new promise.Promise(function(resolve) {
-      debugger;
       resolve(forwardPath(req));
     });
   };
 }
+
 
 function asBuffer(body, options) {
   'use strict';
