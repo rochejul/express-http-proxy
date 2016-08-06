@@ -10,6 +10,7 @@ describe('intercept', function() {
     var app = express();
     app.use(proxy('httpbin.org', {
       intercept: function(rsp) {
+debugger;
         assert(rsp.connection);
         assert(rsp.socket);
         assert(rsp.headers);
@@ -25,6 +26,7 @@ describe('intercept', function() {
     var app = express();
     app.use(proxy('httpbin.org', {
       intercept: function(rsp, data, req, res, cb) {
+        debugger;
         data = JSON.parse(data.toString('utf8'));
         data.intercepted = true;
         cb(null, JSON.stringify(data));
