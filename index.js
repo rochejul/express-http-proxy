@@ -94,10 +94,26 @@ module.exports = function proxy(host, options) {
       //console.log();
     //});
 
+    var createProxyReqOpts = function (userReq) {
+      var proxyReqOpts = {
+        //hostname: parsedHost.host,
+        //port: options.port || parsedHost.port,
+        headers: reqHeaders(userReq, options),
+        method: userReq.method,
+        path: userReq.path,
+        url: userReq.url,
+        //bodyContent: bodyContent,
+        params: userReq.params,
+      };
+      return Promise.resolve(proxyReqOpts);
+    };
 
     maybeDoNothing(userReq, userNext)
       .then(function(userReq) {
         return parseReqBody(userReq);
+      })
+      .then(function(userReq){
+        return createProxyReqOpts(userReq);
       })
       .then(function(userReq) {
         return maybeModifyPath(userReq);
@@ -344,6 +360,7 @@ function defaultForwardPathAsync(forwardPath) {
   'use strict';
   return function(req) {
     return new promise.Promise(function(resolve) {
+      debugger;
       resolve(forwardPath(req));
     });
   };
