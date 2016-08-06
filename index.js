@@ -79,18 +79,34 @@ module.exports = function proxy(host, options) {
       //});
     //};
 
+
+
+    //Promise.all([
+      //maybeDoNothing(userReq, userNext),
+      //parseReqBody(userReq),
+      //maybeModifyPath(userReq)
+    //]).then(function (responses) {
+      //proxyRequest.apply(null, responses);
+    //}
+      //proxyPath = responses[2];
+      //proxyRequest(userReq, userRes, userNext, proxyPath);
+      //debugger;
+      //console.log();
+    //});
+
+
     maybeDoNothing(userReq, userNext)
       .then(function(userReq) {
-        parseReqBody(userReq)
-          .then(function(userReq) {
-            maybeModifyPath(userReq)
-            .then(function(proxyPath) {
-              proxyRequest(userReq, userRes, userNext, proxyPath);
-            });
-          });
+        return parseReqBody(userReq);
       })
-      .catch(function (widget) {
-        userNext(widget);
+      .then(function(userReq) {
+        return maybeModifyPath(userReq);
+      })
+      .then(function (proxyPath) {
+        return proxyRequest(userReq, userRes, userNext, proxyPath);
+      })
+      .catch(function (token) {
+        userNext(token);
       });
 
   };
