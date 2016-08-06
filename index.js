@@ -67,17 +67,32 @@ module.exports = function proxy(host, options) {
       //.then(userResponse);
       ////.catch()
 
+    var maybeModifyReqBody = function (req) {
+      return new promise.Promise(function (resolve, reject) {
+        resolve(req);
+      });
+    };
+
+    var createProxyRequest = function (req) {
+      return new promise.Promise(function (resolve, reject) {
+        resolve(req);
+      });
+    }
 
     maybeDoNothing(userReq, userNext)
       .then(function(userReq) {
         parseReqBody(userReq)
-          .then(function (userReq) {
-            debugger;
-            maybeModifyPath(userReq)
-              .then(function(proxyPath) {
-                debugger;
-                proxyRequest(userReq, userRes, userNext, proxyPath);
+          .then(function(userReq) {
+            createProxyRequest(userReq)
+            .then(function (userReq) {
+              maybeModifyReqBody(userReq)
+              .then(function(userReq) {
+                maybeModifyPath(userReq)
+                .then(function(proxyPath) {
+                  proxyRequest(userReq, userRes, userNext, proxyPath);
+                });
               });
+            });
           });
       })
       .catch(function (widget) {
