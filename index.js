@@ -60,71 +60,33 @@ module.exports = function proxy(host, options) {
     });
   };
 
-  return function proxy(userReq, userRes, userNext) {
-
-    // My Dream!
-    //maybeDoNothing(userReq)
-      //.then(maybeModifyPath)
-      //.then(getRequestBody)
-      //.then(maybeModifyRequest)
-      //.then(maybeModifyRequestBody)
-      //.then(doProxyRequest)
-      //.then(maybeModifyResponse)
-      //.then(userResponse);
-      ////.catch()
-
-    //var maybeModifyReqBody = function (req) {
-      //return new promise.Promise(function (resolve, reject) {
-        //resolve(req);userReq
-      //});
-    //};
-
-    //var createProxyReqOpts = function (req) {
-      //return new promise.Promise(function (resolve) {
-        //resolve(req);
-      //});
-    //};
-
-
-
-    //Promise.all([
-      //maybeDoNothing(userReq, userNext),
-      //parseReqBody(userReq),
-      //maybeModifyPath(userReq)
-    //]).then(function (responses) {
-      //proxyRequest.apply(null, responses);
-    //}
-      //proxyPath = responses[2];
-      //proxyRequest(userReq, userRes, userNext, proxyPath);
-      //debugger;
-      //console.log();
-    //});
-
-    var createProxyReqOpts = function (userReq) {
-      var parsedHost = parseHost(host, userReq);
-      var proxyReqOpts = {
-        hostname: parsedHost.host,
-        port: options.port || parsedHost.port,
-        headers: reqHeaders(userReq, options),
-        method: userReq.method,
-        path: userReq.path,
-        url: userReq.url,
-        params: userReq.params,
-      };
-      if (preserveReqSession) {
-        proxyReqOpts.session = userReq.session;
-      }
-      return Promise.resolve(proxyReqOpts);
+  function createProxyReqOpts(userReq) {
+    var parsedHost = parseHost(host, userReq);
+    var proxyReqOpts = {
+      hostname: parsedHost.host,
+      port: options.port || parsedHost.port,
+      headers: reqHeaders(userReq, options),
+      method: userReq.method,
+      path: userReq.path,
+      url: userReq.url,
+      params: userReq.params,
     };
-
-    function maybeModifyReqBody(proxyReqOpts, userReq) {
-      if (decorateRequest) {
-        debugger;
-        proxyReqOpts = decorateRequest(proxyReqOpts, userReq) || proxyReqOpts;
-      }
-
-      return Promise.resolve(proxyReqOpts);
+    if (preserveReqSession) {
+      proxyReqOpts.session = userReq.session;
     }
+    return Promise.resolve(proxyReqOpts);
+  }
+
+  function maybeModifyReqBody(proxyReqOpts, userReq) {
+    debugger;
+    if (decorateRequest) {
+      proxyReqOpts = decorateRequest(proxyReqOpts, userReq) || proxyReqOpts;
+    }
+
+    return Promise.resolve(proxyReqOpts);
+  }
+
+  return function proxy(userReq, userRes, userNext) {
 
     function maybeModifyResponse(proxyResponse, userReq, userRes) {
       if (!intercept) {
@@ -139,7 +101,6 @@ module.exports = function proxy(host, options) {
               reject(err);
             }
 
-            debugger;
             rspd = asBuffer(rspd, options);
 
             if (!Buffer.isBuffer(rspd)) {
@@ -155,8 +116,6 @@ module.exports = function proxy(host, options) {
               userNext(new Error(error));
             }
 
-
-
             if (!sent) {
               resolve({
                 response: proxyResponse.response,
@@ -168,6 +127,7 @@ module.exports = function proxy(host, options) {
 
       });
     }
+
     maybeDoNothing(userReq, userNext)
       .then(function(userReq){
         return createProxyReqOpts(userReq);
@@ -198,7 +158,6 @@ module.exports = function proxy(host, options) {
       })
       .then(function(finalResponse) {
         userRes.send(finalResponse.rspd);
-        userNext();
       })
       .catch(function (token) {
         userNext(token);
@@ -219,9 +178,7 @@ module.exports = function proxy(host, options) {
     }
 
     return Promise.resolve(proxyResponse);
-
   }
-
 
   function setRequestHeaders(proxyReqOpts) {
     proxyReqOpts.headers['content-length'] = getContentLength(proxyReqOpts.body);
