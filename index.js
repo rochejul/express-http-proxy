@@ -78,7 +78,6 @@ module.exports = function proxy(host, options) {
   }
 
   function maybeModifyReqBody(proxyReqOpts, userReq) {
-    debugger;
     if (decorateRequest) {
       proxyReqOpts = decorateRequest(proxyReqOpts, userReq) || proxyReqOpts;
     }
@@ -87,15 +86,14 @@ module.exports = function proxy(host, options) {
   }
 
   return function proxy(userReq, userRes, userNext) {
-
-    function maybeModifyResponse(proxyResponse, userReq, userRes) {
+    function maybeModifyResponse(bundle, userReq) {
       if (!intercept) {
-        return promise.Promise.resolve(proxyResponse);
+        return promise.Promise.resolve(bundle);
       }
 
       return new promise.Promise(function (resolve,reject) {
         // doing pushups to maintain the old interface
-        intercept(proxyResponse.response, proxyResponse.rspData, userReq, userRes,
+        intercept(bundle.proxyRes, bundle.proxyResData, userReq, bundle.userRes,
           function (err, rspd, sent){
             if (err) {
               reject(err);
@@ -128,6 +126,16 @@ module.exports = function proxy(host, options) {
       });
     }
 
+
+    //bundle = {
+      //userRes:
+      //userReq:
+      //userNext:
+      //proxyReq:
+      //proxyRes:
+    //};
+
+
     maybeDoNothing(userReq, userNext)
       .then(function(userReq){
         return createProxyReqOpts(userReq);
@@ -150,14 +158,14 @@ module.exports = function proxy(host, options) {
       .then(function (proxyReqOpts) {
         return proxyReq2(proxyReqOpts, userReq, userNext);
       })
-      .then(function(proxyResponse) {
-        return copyProxyResponseHeaders(proxyResponse, userRes);
+      .then(function(bundle) {
+        return copyProxyResponseHeaders(bundle, userRes);
       })
-      .then(function (proxyResponse) {
-        return maybeModifyResponse(proxyResponse, userReq, userRes);
+      .then(function (bundle) {
+        return maybeModifyResponse(bundle, userReq);
       })
       .then(function(finalResponse) {
-        userRes.send(finalResponse.rspd);
+        userRes.send(finalResponse.proxyResData);
       })
       .catch(function (token) {
         userNext(token);
@@ -165,19 +173,24 @@ module.exports = function proxy(host, options) {
 
   };
 
-  function copyProxyResponseHeaders(proxyResponse, userRes) {
+  function copyProxyResponseHeaders(bundle, userRes) {
     // SIDE EFFECTS: THIS MODIFYS THE userRes !!!
+    var proxyRes = bundle.proxyRes;
+
     if (!userRes.headersSent) {
-      var rsp = proxyResponse.response;
-      userRes.status(rsp.statusCode);
-      Object.keys(rsp.headers)
+      userRes.status(proxyRes.statusCode);
+      Object.keys(proxyRes.headers)
         .filter(function(item) { return item !== 'transfer-encoding'; })
         .forEach(function(item) {
-          userRes.set(item, rsp.headers[item]);
+          userRes.set(item, proxyRes.headers[item]);
         });
     }
 
-    return Promise.resolve(proxyResponse);
+    return Promise.resolve({
+      proxyRes: proxyRes,
+      userRes: userRes,
+      proxyResData: bundle.proxyResData
+    });
   }
 
   function setRequestHeaders(proxyReqOpts) {
@@ -211,8 +224,8 @@ module.exports = function proxy(host, options) {
         rsp.on('end', function() {
           var rspData = Buffer.concat(chunks, chunkLength(chunks));
           resolve({
-            response: this,
-            rspData: rspData
+            proxyRes: this,
+            proxyResData: rspData
           });
         });
       });
@@ -220,116 +233,115 @@ module.exports = function proxy(host, options) {
     });
   }
 
-  function proxyRequest(proxyReqOpts, userReq, userNext) {
-    runProxy(proxyReqOpts.body);
+  //function nasdgoasdgproxyRequest(proxyReqOpts, userReq, userNext) {
+    //runProxy(proxyReqOpts.body);
 
-    function runProxy(bodyContent) {
+    //function runProxy(bodyContent) {
 
-      var parsedHost = parseHost(host, userReq); // terrible, but needed atm
+      //var parsedHost = parseHost(host, userReq); // terrible, but needed atm
 
-      //if (err && !bodyContent) {
-        //return userNext(err);
+      ////if (err && !bodyContent) {
+        ////return userNext(err);
+      ////}
+
+      //proxyReqOpts.headers['content-length'] = getContentLength(bodyContent);
+
+      //if (bodyEncoding(options)) {
+        //proxyReqOpts.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
+      //}
+      //var proxyReq = parsedHost.module.request(proxyReqOpts, function(rsp) {
+        //var chunks = [];
+
+        //rsp.on('data', function(chunk) {
+          //chunks.push(chunk);
+        //});
+
+        //rsp.on('end', function() {
+
+          //var rspData = Buffer.concat(chunks, chunkLength(chunks));
+
+          //if (intercept) {
+            //intercept(rsp, rspData, userReq, userRes, function(err, rspd, sent) {
+              //if (err) {
+                //return userNext(err);
+              //}
+
+              //rspd = asBuffer(rspd, options);
+
+              //if (!Buffer.isBuffer(rspd)) {
+                //userNext(new Error('intercept should return string or' +
+                      //'buffer as data'));
+              //}
+
+              //if (!userRes.headersSent) {
+                //userRes.set('content-length', rspd.length);
+              //} else if (rspd.length !== rspData.length) {
+                //var error = '"Content-Length" is already sent,' +
+                      //'the length of response data can not be changed';
+                //userNext(new Error(error));
+              //}
+
+              //if (!sent) {
+                //userRes.send(rspd);
+              //}
+            //});
+          //} else {
+            //// see issue https://github.com/villadora/express-http-proxy/issues/104
+            //// Not sure how to automate tests on this line, so be careful when changing.
+            //if (!userRes.headersSent) {
+              //userRes.send(rspData);
+            //}
+          //}
+        //});
+
+        //rsp.on('error', function(e) {
+          //userNext(e);
+        //});
+
+        //if (!userRes.headersSent) {
+          //userRes.status(rsp.statusCode);
+          //Object.keys(rsp.headers)
+            //.filter(function(item) { return item !== 'transfer-encoding'; })
+            //.forEach(function(item) {
+              //userRes.set(item, rsp.headers[item]);
+            //});
+        //}
+      //});
+
+      //if (bodyContent.length) {
+        //proxyReq.write(bodyContent);
       //}
 
-      debugger;
-      proxyReqOpts.headers['content-length'] = getContentLength(bodyContent);
+      //proxyReq.end();
 
-      if (bodyEncoding(options)) {
-        proxyReqOpts.headers[ 'Accept-Encoding' ] = bodyEncoding(options);
-      }
-      var proxyReq = parsedHost.module.request(proxyReqOpts, function(rsp) {
-        var chunks = [];
+      //proxyReq.on('socket', function(socket) {
+        //if (options.timeout) {
+          //socket.setTimeout(options.timeout, function() {
+            //proxyReq.abort();
+          //});
+        //}
+      //});
 
-        rsp.on('data', function(chunk) {
-          chunks.push(chunk);
-        });
-
-        rsp.on('end', function() {
-
-          var rspData = Buffer.concat(chunks, chunkLength(chunks));
-
-          if (intercept) {
-            intercept(rsp, rspData, userReq, userRes, function(err, rspd, sent) {
-              if (err) {
-                return userNext(err);
-              }
-
-              rspd = asBuffer(rspd, options);
-
-              if (!Buffer.isBuffer(rspd)) {
-                userNext(new Error('intercept should return string or' +
-                      'buffer as data'));
-              }
-
-              if (!userRes.headersSent) {
-                userRes.set('content-length', rspd.length);
-              } else if (rspd.length !== rspData.length) {
-                var error = '"Content-Length" is already sent,' +
-                      'the length of response data can not be changed';
-                userNext(new Error(error));
-              }
-
-              if (!sent) {
-                userRes.send(rspd);
-              }
-            });
-          } else {
-            // see issue https://github.com/villadora/express-http-proxy/issues/104
-            // Not sure how to automate tests on this line, so be careful when changing.
-            if (!userRes.headersSent) {
-              userRes.send(rspData);
-            }
-          }
-        });
-
-        rsp.on('error', function(e) {
-          userNext(e);
-        });
-
-        if (!userRes.headersSent) {
-          userRes.status(rsp.statusCode);
-          Object.keys(rsp.headers)
-            .filter(function(item) { return item !== 'transfer-encoding'; })
-            .forEach(function(item) {
-              userRes.set(item, rsp.headers[item]);
-            });
-        }
-      });
-
-      if (bodyContent.length) {
-        proxyReq.write(bodyContent);
-      }
-
-      proxyReq.end();
-
-      proxyReq.on('socket', function(socket) {
-        if (options.timeout) {
-          socket.setTimeout(options.timeout, function() {
-            proxyReq.abort();
-          });
-        }
-      });
-
-      proxyReq.on('error', function(err) {
-        if (err.code === 'ECONNRESET') {
-          userRes.setHeader('X-Timout-Reason',
-            'express-http-proxy timed out your request after ' +
-            options.timeout + 'ms.');
-          userRes.writeHead(504, {'Content-Type': 'text/plain'});
-          userRes.end();
-          userNext();
-        } else {
-          userNext(err);
-        }
-      });
+      //proxyReq.on('error', function(err) {
+        //if (err.code === 'ECONNRESET') {
+          //userRes.setHeader('X-Timout-Reason',
+            //'express-http-proxy timed out your request after ' +
+            //options.timeout + 'ms.');
+          //userRes.writeHead(504, {'Content-Type': 'text/plain'});
+          //userRes.end();
+          //userNext();
+        //} else {
+          //userNext(err);
+        //}
+      //});
 
 
-      userReq.on('aborted', function() {
-        proxyReq.abort();
-      });
+      //userReq.on('aborted', function() {
+        //proxyReq.abort();
+      //});
 
-    }
-  }
+    //}
+  //}
 };
 
 

@@ -59,7 +59,6 @@ describe('proxies to requested port', function() {
 
   describe('when host is a function', function() {
 
-
     it('and port is on the String returned', function(done) {
 
       http.use(proxy(
