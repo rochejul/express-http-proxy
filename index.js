@@ -38,9 +38,9 @@ module.exports = function proxy(host, options) {
   }
 
   var maybeDoNothing = function(userReq, userNext) {
-      return new promise.Promise(function(resolve, reject) {
-        return filter(userReq) ? resolve(userReq) : reject(userNext);
-      });
+    return new promise.Promise(function(resolve, reject) {
+      return filter(userReq) ? resolve(userReq) : reject(userNext);
+    });
   };
 
   var parseReqBody = function(userReq, proxyReqOpts) {
@@ -152,7 +152,7 @@ module.exports = function proxy(host, options) {
         return maybeModifyPath(proxyReqOpts);
       })
       .then(function(proxyReqOpts) {
-        return maybeModifyReqBody(proxyReqOpts, userReq);
+        return maybeDecorateRequest(proxyReqOpts, userReq);
       })
       .then(function(proxyReqOpts) {
         return cleanUpBodyContent(proxyReqOpts);
@@ -436,7 +436,6 @@ function reqHeaders(req, options) {
   'use strict';
 
   var headers = options.headers || {};
-
   var skipHdrs = [ 'connection', 'content-length' ];
   if (!options.preserveHostHdr) {
     skipHdrs.push('host');
