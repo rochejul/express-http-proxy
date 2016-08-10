@@ -99,6 +99,7 @@ module.exports = function proxy(host, options) {
         // doing pushups to maintain the old interface
         intercept(bundle.proxyRes, bundle.proxyResData, userReq, bundle.userRes,
           function (err, rspd, sent){
+            debugger;
             if (err) {
               reject(err);
             }
@@ -120,8 +121,8 @@ module.exports = function proxy(host, options) {
 
             if (!sent) {
               resolve({
-                response: proxyResponse.response,
-                rspd: rspd,
+                proxyRes: bundle.proxyRes,
+                proxyResData: rspd,
                 sent: sent
               });
             }
@@ -169,6 +170,8 @@ module.exports = function proxy(host, options) {
         return maybeModifyResponse(bundle, userReq);
       })
       .then(function(finalResponse) {
+        debugger;
+
         userRes.send(finalResponse.proxyResData);
       })
       .catch(function (token) {
