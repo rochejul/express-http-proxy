@@ -29,6 +29,10 @@ module.exports = function proxy(host, options) {
   /* To avoid confusion between the nested req, res, next functions, they are wordily named */
 
   function maybeModifyPath(reqOpts) {
+    if (options.forwardPathAsync) {
+      return options.forwardPathAsync(reqOpts);
+    }
+
     reqOpts.path = forwardPath(reqOpts);
     return Promise.resolve(reqOpts);
   }
@@ -238,8 +242,6 @@ module.exports = function proxy(host, options) {
       });
 
       proxyReq.on('socket', function(socket) {
-        console.log('in socket');
-        debugger;
         if (options.timeout) {
           socket.setTimeout(options.timeout, function() {
             proxyReq.abort();
@@ -248,7 +250,6 @@ module.exports = function proxy(host, options) {
       });
 
       proxyReq.on('error', function(err) {
-        debugger;
         reject(err);
         //if (err.code === 'ECONNRESET') {
           //userRes.setHeader('X-Timout-Reason',

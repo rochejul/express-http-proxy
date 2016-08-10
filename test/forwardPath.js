@@ -83,10 +83,11 @@ describe('forwardPath', function() {
   it('test forwardPathAsync to known path yields 200', function(done) {
     var app = express();
     app.use(proxy('httpbin.org', {
-      forwardPathAsync: function() {
+      forwardPathAsync: function(reqOpts) {
         return new promise.Promise(function(resolve) {
           setTimeout(function() {
-            resolve('/post');
+            reqOpts.path = '/post';
+            resolve(reqOpts);
           }, 250);
         });
       }}
