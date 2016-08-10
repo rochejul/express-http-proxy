@@ -81,12 +81,20 @@ module.exports = function proxy(host, options) {
     return Promise.resolve(proxyReqOpts);
   }
 
-  function maybeModifyReqBody(proxyReqOpts, userReq) {
+  // { proxy = { req, reqOpts, res, resData }, user = { req, res, reqBody } }
+  // returns reqOpts
+  function maybeDecorateRequest(proxyReqOpts, userReq) {
+    var results;
     if (decorateRequest) {
-      proxyReqOpts = decorateRequest(proxyReqOpts, userReq) || proxyReqOpts;
+      results = decorateRequest(proxyReqOpts, userReq);
+      if (results instanceof Promise) {
+        results.then(function (proxyReqOpts) {
+          Promise.resolve(proxyReqOpts);
+        });
+      }
     }
 
-    return Promise.resolve(proxyReqOpts);
+    return Promise.resolve(results || proxyReqOpts);
   }
 
   return function proxy(userReq, userRes, userNext) {
@@ -140,6 +148,20 @@ module.exports = function proxy(host, options) {
       //proxyRes:
     //};
 
+    var data = {
+      proxy: {
+        req: null,
+        reqOpts: null,
+        res: null,
+        resData:null
+      },
+      user: {
+        req: userReq,
+        res: userRes,
+        reqBody: null,
+        next: userNext
+      }
+    };
 
     maybeDoNothing(userReq, userNext)
       .then(function(userReq){

@@ -50,5 +50,30 @@ describe('decorateRequest', function() {
       });
 
   });
+
+  it('test decorateRequest can be a promise', function(done) {
+    // working on this test
+    var app = express();
+    app.use(proxy('httpbin.org', {
+      decorateRequest: function (reqOpts, req) {
+        return new Promise(function (resolve) {
+          setTimeout(function () {
+            reqOpts.decorated = true;
+            resolve(reqOpts);
+          }, 200);
+        });
+      }
+    }));
+
+    request(app)
+      .get('/')
+      .end(function(err, res) {
+        debugger;
+        if (err) { return done(err); }
+        done();
+      });
+
+  });
+
 });
 
