@@ -212,8 +212,10 @@ module.exports = function proxy(host, options) {
   }
 
   function proxyReq2(proxyReqOpts, userReq) {
-    return new promise.Promise(function (resolve) {
+    return new promise.Promise(function (resolve, reject) {
       var parsedHost = parseHost(host, userReq); // terrible, but needed atm
+      var bodyContent = proxyReqOpts.body;
+      delete proxyReqOpts.body;
       var proxyReq = parsedHost.module.request(proxyReqOpts, function(rsp) {
         var chunks = [];
 
@@ -228,8 +230,44 @@ module.exports = function proxy(host, options) {
             proxyResData: rspData
           });
         });
+
+        rsp.on('error', function(e) {
+          reject(e);
+        });
+
       });
+
+      proxyReq.on('socket', function(socket) {
+        console.log('in socket');
+        debugger;
+        if (options.timeout) {
+          socket.setTimeout(options.timeout, function() {
+            proxyReq.abort();
+          });
+        }
+      });
+
+      proxyReq.on('error', function(err) {
+        debugger;
+        reject(err);
+        //if (err.code === 'ECONNRESET') {
+          //userRes.setHeader('X-Timout-Reason',
+            //'express-http-proxy timed out your request after ' +
+            //options.timeout + 'ms.');
+          //userRes.writeHead(504, {'Content-Type': 'text/plain'});
+          //userRes.end();
+          //userNext();
+        //} else {
+          //userNext(err);
+        //}
+      });
+
+      if (bodyContent.length) {
+        proxyReq.write(bodyContent);
+      }
+
       proxyReq.end();
+
     });
   }
 

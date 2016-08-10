@@ -32,7 +32,6 @@ describe('body encoding', function() {
     app.use(proxy('httpbin.org', {
       reqBodyEncoding: null,
       decorateRequest: function(reqOpts) {
-debugger;
         assert((new Buffer(reqOpts.body).toString('hex')).indexOf(pngData.toString('hex')) >= 0,
           'body should contain same data');
         return reqOpts;
